@@ -145,6 +145,12 @@ enum Commands {
         #[command(subcommand)]
         command: Option<ConfigCommands>,
     },
+
+    /// Manage trx-api service
+    Service {
+        #[command(subcommand)]
+        command: ServiceCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -167,6 +173,27 @@ enum ConfigCommands {
         /// New value
         value: String,
     },
+}
+
+#[derive(Subcommand)]
+enum ServiceCommands {
+    /// Start the API service in background
+    Start,
+
+    /// Run the API service in foreground (for debugging)
+    Run,
+
+    /// Stop the API service
+    Stop,
+
+    /// Restart the API service
+    Restart,
+
+    /// Show service status
+    Status,
+
+    /// Show instructions for enabling auto-start
+    Enable,
 }
 
 #[derive(Subcommand)]
@@ -242,5 +269,27 @@ fn main() -> Result<()> {
             Some(ConfigCommands::Set { key, value }) => commands::config_set(&key, &value),
             None => commands::config_show(cli.json),
         },
+        Commands::Service { command } => commands::service(command),
+    }
+}
+
+impl commands::ServiceCommand for ServiceCommands {
+    fn is_start(&self) -> bool {
+        matches!(self, ServiceCommands::Start)
+    }
+    fn is_run(&self) -> bool {
+        matches!(self, ServiceCommands::Run)
+    }
+    fn is_stop(&self) -> bool {
+        matches!(self, ServiceCommands::Stop)
+    }
+    fn is_restart(&self) -> bool {
+        matches!(self, ServiceCommands::Restart)
+    }
+    fn is_status(&self) -> bool {
+        matches!(self, ServiceCommands::Status)
+    }
+    fn is_enable(&self) -> bool {
+        matches!(self, ServiceCommands::Enable)
     }
 }

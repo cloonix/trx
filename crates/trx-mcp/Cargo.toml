@@ -1,0 +1,33 @@
+[package]
+name = "trx-mcp"
+version.workspace = true
+edition.workspace = true
+description = "MCP server for trx issue tracker"
+
+[[bin]]
+name = "trx-mcp"
+path = "src/main.rs"
+
+[dependencies]
+trx-core = { path = "../trx-core" }
+
+# Async runtime
+tokio.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# Date/time
+chrono.workspace = true
+
+# Error handling
+anyhow.workspace = true
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# MCP server framework
+mcp-server = "0.1"
+mcp-spec = "0.1"

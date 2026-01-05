@@ -34,6 +34,9 @@ pub enum Error {
     #[error("Invalid issue type: {0}")]
     InvalidType(String),
 
+    #[error("Service error: {0}")]
+    Service(String),
+
     #[error("{0}")]
     Other(String),
 }

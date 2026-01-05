@@ -242,6 +242,7 @@ struct IssueForm {
     description: String,
     issue_type: trx_core::IssueType,
     priority: u8,
+    status: trx_core::Status,
     selected_field: FormField,
 }
 
@@ -251,6 +252,7 @@ enum FormField {
     Description,
     IssueType,
     Priority,
+    Status,
 }
 
 impl IssueForm {
@@ -260,6 +262,7 @@ impl IssueForm {
             description: String::new(),
             issue_type: trx_core::IssueType::Task,
             priority: 2,
+            status: trx_core::Status::Open,
             selected_field: FormField::Title,
         }
     }
@@ -274,6 +277,7 @@ impl IssueForm {
             description: issue.description.clone().unwrap_or_default(),
             issue_type: issue.issue_type,
             priority: issue.priority,
+            status: issue.status,
             selected_field: FormField::Title,
         }
     }
@@ -389,7 +393,7 @@ impl FilterState {
             enabled_types,
             enabled_labels: HashSet::new(),
             ready_only: false,
-            show_blocked: true,
+            show_blocked: false,
         }
     }
 
@@ -535,6 +539,21 @@ impl App {
                     self.issue_form = IssueForm::from_issue(issue);
                     self.mode = AppMode::EditIssue;
                 }
+            }
+            KeyAction::Char('1') => {
+                let _ = self.change_issue_status(trx_core::Status::Open);
+            }
+            KeyAction::Char('2') => {
+                let _ = self.change_issue_status(trx_core::Status::InProgress);
+            }
+            KeyAction::Char('3') => {
+                let _ = self.change_issue_status(trx_core::Status::Blocked);
+            }
+            KeyAction::Char('4') => {
+                let _ = self.change_issue_status(trx_core::Status::Closed);
+            }
+            KeyAction::Char('c') => {
+                let _ = self.close_issue();
             }
             KeyAction::Char(' ') => {
                 self.selection.toggle_selection();
@@ -807,7 +826,8 @@ impl App {
                 FormField::Title => self.issue_form.selected_field = FormField::Description,
                 FormField::Description => self.issue_form.selected_field = FormField::IssueType,
                 FormField::IssueType => self.issue_form.selected_field = FormField::Priority,
-                FormField::Priority => self.issue_form.selected_field = FormField::Title,
+                FormField::Priority => self.issue_form.selected_field = FormField::Status,
+                FormField::Status => self.issue_form.selected_field = FormField::Title,
             },
             KeyAction::Enter => {
                 if self.issue_form.title.trim().is_empty() {
@@ -846,6 +866,24 @@ impl App {
                         self.issue_form.priority.saturating_sub(1)
                     };
                 }
+                FormField::Status => {
+                    let statuses = [
+                        trx_core::Status::Open,
+                        trx_core::Status::InProgress,
+                        trx_core::Status::Blocked,
+                        trx_core::Status::Closed,
+                    ];
+                    let current_idx = statuses
+                        .iter()
+                        .position(|&s| s == self.issue_form.status)
+                        .unwrap_or(0);
+                    let new_idx = if matches!(action, KeyAction::Up) {
+                        (current_idx + statuses.len().saturating_sub(1)) % statuses.len()
+                    } else {
+                        (current_idx + 1) % statuses.len()
+                    };
+                    self.issue_form.status = statuses[new_idx];
+                }
                 _ => {}
             },
             KeyAction::Backspace => match self.issue_form.selected_field {
@@ -880,7 +918,8 @@ impl App {
                 FormField::Title => self.issue_form.selected_field = FormField::Description,
                 FormField::Description => self.issue_form.selected_field = FormField::IssueType,
                 FormField::IssueType => self.issue_form.selected_field = FormField::Priority,
-                FormField::Priority => self.issue_form.selected_field = FormField::Title,
+                FormField::Priority => self.issue_form.selected_field = FormField::Status,
+                FormField::Status => self.issue_form.selected_field = FormField::Title,
             },
             KeyAction::Enter => {
                 if self.issue_form.title.trim().is_empty() {
@@ -917,6 +956,24 @@ impl App {
                     } else {
                         self.issue_form.priority.saturating_sub(1)
                     };
+                }
+                FormField::Status => {
+                    let statuses = [
+                        trx_core::Status::Open,
+                        trx_core::Status::InProgress,
+                        trx_core::Status::Blocked,
+                        trx_core::Status::Closed,
+                    ];
+                    let current_idx = statuses
+                        .iter()
+                        .position(|&s| s == self.issue_form.status)
+                        .unwrap_or(0);
+                    let new_idx = if matches!(action, KeyAction::Up) {
+                        (current_idx + statuses.len().saturating_sub(1)) % statuses.len()
+                    } else {
+                        (current_idx + 1) % statuses.len()
+                    };
+                    self.issue_form.status = statuses[new_idx];
                 }
                 _ => {}
             },
@@ -957,6 +1014,7 @@ impl App {
         };
         issue.issue_type = self.issue_form.issue_type;
         issue.priority = self.issue_form.priority;
+        issue.status = self.issue_form.status;
 
         self.store.create(issue)?;
         self.apply_filters()?;
@@ -974,10 +1032,38 @@ impl App {
             };
             updated_issue.issue_type = self.issue_form.issue_type;
             updated_issue.priority = self.issue_form.priority;
+            updated_issue.status = self.issue_form.status;
             updated_issue.updated_at = chrono::Utc::now();
 
             self.store.update(updated_issue)?;
             self.apply_filters()?;
+        }
+        Ok(())
+    }
+
+    fn change_issue_status(&mut self, new_status: trx_core::Status) -> Result<()> {
+        if let Some(issue) = self.current_issue() {
+            let mut updated_issue = issue.clone();
+            updated_issue.status = new_status;
+            if new_status == trx_core::Status::Closed {
+                updated_issue.closed_at = Some(chrono::Utc::now());
+            }
+            updated_issue.updated_at = chrono::Utc::now();
+
+            self.store.update(updated_issue)?;
+            self.apply_filters()?;
+            self.show_status(format!("Issue status changed to {}", new_status));
+        }
+        Ok(())
+    }
+
+    fn close_issue(&mut self) -> Result<()> {
+        if let Some(issue) = self.current_issue() {
+            let mut updated_issue = issue.clone();
+            updated_issue.close(None);
+            self.store.update(updated_issue)?;
+            self.apply_filters()?;
+            self.show_status("Issue closed".to_string());
         }
         Ok(())
     }
@@ -1342,7 +1428,7 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
             Span::styled(mode_text, mode_style),
             Span::raw(" | "),
             Span::raw(format!("Selected: {} | ", selected_count)),
-            Span::raw("[:a]dd [:e]dit [:s]ort [:?]help [/]search [:q]uit"),
+            Span::raw("[:a]dd [:e]dit [:c]lose [1-4]status [:s]ort [:?]help [/]search [:q]uit"),
         ])
     };
 
@@ -1380,6 +1466,11 @@ fn render_help_overlay(f: &mut Frame, _app: &App) {
         Line::from("Actions:"),
         Line::from("  a          Add issue"),
         Line::from("  e          Edit issue"),
+        Line::from("  c          Close issue"),
+        Line::from("  1          Set Open"),
+        Line::from("  2          Set In Progress"),
+        Line::from("  3          Set Blocked"),
+        Line::from("  4          Set Closed"),
         Line::from("  /          Search"),
         Line::from("  s          Sort"),
         Line::from("  r          Refresh"),
@@ -1558,6 +1649,23 @@ fn render_issue_form(f: &mut Frame, app: &App, title: &str) {
             Span::styled(
                 format!("P{}", form.priority),
                 if form.selected_field == FormField::Priority {
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                },
+            ),
+            Span::raw(" (↑/↓ to change)"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                "Status: ",
+                field_style(form.selected_field == FormField::Status),
+            ),
+            Span::styled(
+                format!("[{}]", form.status),
+                if form.selected_field == FormField::Status {
                     Style::default()
                         .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD)

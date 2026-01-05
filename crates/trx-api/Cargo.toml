@@ -1,0 +1,35 @@
+[package]
+name = "trx-api"
+version.workspace = true
+edition.workspace = true
+description = "REST API server for trx issue tracker"
+
+[[bin]]
+name = "trx-api"
+path = "src/main.rs"
+
+[dependencies]
+trx-core = { path = "../trx-core" }
+
+# Async runtime
+tokio.workspace = true
+
+# Web framework
+axum = { version = "0.8", features = ["json"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# Date/time
+chrono.workspace = true
+
+# Error handling
+thiserror.workspace = true
+anyhow.workspace = true
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

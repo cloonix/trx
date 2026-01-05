@@ -15,3 +15,7 @@ sha2.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true
 petgraph.workspace = true
+dirs.workspace = true
+
+# Process management
+sysinfo = "0.32"

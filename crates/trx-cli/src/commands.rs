@@ -750,3 +750,182 @@ pub fn config_set(key: &str, value: &str) -> Result<()> {
 
     Ok(())
 }
+
+// ============================================================================
+// Service commands
+// ============================================================================
+
+pub trait ServiceCommand {
+    fn is_start(&self) -> bool;
+    fn is_run(&self) -> bool;
+    fn is_stop(&self) -> bool;
+    fn is_restart(&self) -> bool;
+    fn is_status(&self) -> bool;
+    fn is_enable(&self) -> bool;
+}
+
+pub fn service<T: ServiceCommand>(cmd: T) -> Result<()> {
+    use trx_core::{ServiceManager, ServiceStatus};
+
+    let manager = ServiceManager::new()
+        .map_err(|e| anyhow::anyhow!("Failed to initialize service manager: {}", e))?;
+
+    if cmd.is_start() {
+        println!("Starting trx-api service...");
+        manager
+            .start(false, None)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+        // Wait and check status
+        std::thread::sleep(std::time::Duration::from_secs(1));
+
+        match manager.status() {
+            ServiceStatus::Running { pid, port } => {
+                println!("{} Service started (PID: {})", "✓".green(), pid);
+                if let Some(p) = port {
+                    println!("  Listening on: 127.0.0.1:{}", p);
+                }
+            }
+            _ => {
+                println!("{} Service failed to start", "✗".red());
+                std::process::exit(1);
+            }
+        }
+    } else if cmd.is_run() {
+        println!("Running trx-api in foreground...");
+        println!("Press Ctrl+C to stop");
+        manager
+            .start(true, None)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+    } else if cmd.is_stop() {
+        println!("Stopping trx-api service...");
+        match manager.stop() {
+            Ok(()) => println!("{} Service stopped", "✓".green()),
+            Err(e) => {
+                println!("{} {}", "✗".red(), e);
+                std::process::exit(1);
+            }
+        }
+    } else if cmd.is_restart() {
+        println!("Restarting trx-api service...");
+        manager
+            .restart(None)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+        std::thread::sleep(std::time::Duration::from_secs(1));
+
+        match manager.status() {
+            ServiceStatus::Running { pid, port } => {
+                println!("{} Service restarted (PID: {})", "✓".green(), pid);
+                if let Some(p) = port {
+                    println!("  Listening on: 127.0.0.1:{}", p);
+                }
+            }
+            _ => {
+                println!("{} Service failed to restart", "✗".red());
+                std::process::exit(1);
+            }
+        }
+    } else if cmd.is_status() {
+        match manager.status() {
+            ServiceStatus::Running { pid, port } => {
+                println!("Service is {}", "running".green());
+                println!("  PID: {}", pid);
+                if let Some(p) = port {
+                    println!("  Port: {}", p);
+                }
+            }
+            ServiceStatus::Stopped => {
+                println!("Service is {}", "stopped".yellow());
+            }
+            ServiceStatus::Dead => {
+                println!("Service appears to be {} (stale PID file)", "dead".red());
+                println!("Try running 'trx service stop' to cleanup");
+            }
+        }
+    } else if cmd.is_enable() {
+        println!("{}", "Auto-start configuration:".bold());
+        println!();
+
+        #[cfg(target_os = "linux")]
+        {
+            let exe_dir = std::env::current_exe()?
+                .parent()
+                .unwrap()
+                .display()
+                .to_string();
+
+            println!("For systemd (Linux):");
+            println!();
+            println!("1. Create ~/.config/systemd/user/trx-api.service:");
+            println!("   [Unit]");
+            println!("   Description=trx issue tracker API");
+            println!("   After=network.target");
+            println!();
+            println!("   [Service]");
+            println!("   Type=simple");
+            println!("   ExecStart={}/trx-api", exe_dir);
+            println!("   Restart=on-failure");
+            println!();
+            println!("   [Install]");
+            println!("   WantedBy=default.target");
+            println!();
+            println!("2. Enable and start:");
+            println!("   systemctl --user enable trx-api");
+            println!("   systemctl --user start trx-api");
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            let exe_dir = std::env::current_exe()?
+                .parent()
+                .unwrap()
+                .display()
+                .to_string();
+
+            println!("For launchd (macOS):");
+            println!();
+            println!("1. Create ~/Library/LaunchAgents/com.trx.api.plist:");
+            println!("   <?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+            println!("   <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\"");
+            println!("     \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">");
+            println!("   <plist version=\"1.0\">");
+            println!("   <dict>");
+            println!("     <key>Label</key>");
+            println!("     <string>com.trx.api</string>");
+            println!("     <key>ProgramArguments</key>");
+            println!("     <array>");
+            println!("       <string>{}/trx-api</string>", exe_dir);
+            println!("     </array>");
+            println!("     <key>RunAtLoad</key>");
+            println!("     <true/>");
+            println!("     <key>KeepAlive</key>");
+            println!("     <true/>");
+            println!("   </dict>");
+            println!("   </plist>");
+            println!();
+            println!("2. Load:");
+            println!("   launchctl load ~/Library/LaunchAgents/com.trx.api.plist");
+        }
+
+        #[cfg(windows)]
+        {
+            let exe_dir = std::env::current_exe()?
+                .parent()
+                .unwrap()
+                .display()
+                .to_string();
+
+            println!("For Windows:");
+            println!();
+            println!("1. Add to startup via Task Scheduler:");
+            println!("   - Open Task Scheduler");
+            println!("   - Create Basic Task");
+            println!("   - Trigger: At log on");
+            println!("   - Action: Start a program");
+            println!("   - Program: {}\\trx-api.exe", exe_dir);
+        }
+    }
+
+    Ok(())
+}

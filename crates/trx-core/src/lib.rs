@@ -8,6 +8,7 @@ pub mod error;
 pub mod graph;
 pub mod id;
 pub mod issue;
+pub mod service;
 pub mod store;
 
 pub use config::Config;
@@ -15,6 +16,7 @@ pub use error::Error;
 pub use graph::IssueGraph;
 pub use id::generate_id;
 pub use issue::{Dependency, DependencyType, Issue, IssueType, Status};
+pub use service::{ServiceManager, ServiceStatus};
 pub use store::Store;
 
 /// Result type for trx operations
