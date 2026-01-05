@@ -1,0 +1,19 @@
+[package]
+name = "trx-cli"
+version.workspace = true
+edition.workspace = true
+description = "CLI for trx issue tracker"
+
+[[bin]]
+name = "trx"
+path = "src/main.rs"
+
+[dependencies]
+trx-core = { path = "../trx-core" }
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+anyhow.workspace = true
+colored.workspace = true
+tabled.workspace = true

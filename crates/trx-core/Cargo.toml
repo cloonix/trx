@@ -1,0 +1,17 @@
+[package]
+name = "trx-core"
+version.workspace = true
+edition.workspace = true
+description = "Core library for trx issue tracker"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+base32.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+petgraph.workspace = true

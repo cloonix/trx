@@ -1,0 +1,44 @@
+# trx configuration
+# Schema: https://raw.githubusercontent.com/byteowlz/schemas/main/trx/trx.config.schema.json
+
+# Issue ID prefix (e.g., "trx", "myproject")
+prefix = "trx"
+
+# Default priority for new issues (0=critical, 1=high, 2=medium, 3=low, 4=backlog)
+default_priority = 2
+
+# Default issue type (bug, feature, task, epic, chore)
+default_type = "task"
+
+# Auto-sync after mutations (git add + commit)
+auto_sync = false
+
+# Sync commit message template
+# Variables: {action}, {id}, {title}
+sync_message_template = "trx: {action} {id}"
+
+# Show closed issues in list by default
+show_closed = false
+
+# Editor command for editing descriptions (uses $EDITOR if not set)
+# editor = "vim"
+
+[git]
+# Automatically stage .trx/ after changes
+auto_stage = false
+
+# Branch to sync to (if different from current)
+# sync_branch = "main"
+
+[display]
+# Use colors in output
+colors = true
+
+# Date format for display (strftime format)
+date_format = "%Y-%m-%d %H:%M"
+
+# Show issue count in list header
+show_count = true
+
+# Maximum title length before truncation
+max_title_length = 80

@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/byteowlz/schemas/main/trx/trx.config.schema.json",
+  "title": "trx Configuration",
+  "description": "Configuration file for trx issue tracker (.trx/config.toml)",
+  "type": "object",
+  "properties": {
+    "prefix": {
+      "type": "string",
+      "description": "Issue ID prefix (e.g., 'trx', 'myproject')",
+      "default": "trx",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "examples": ["trx", "myproject", "app"]
+    },
+    "default_priority": {
+      "type": "integer",
+      "description": "Default priority for new issues",
+      "default": 2,
+      "minimum": 0,
+      "maximum": 4,
+      "x-priority-values": {
+        "0": "critical",
+        "1": "high",
+        "2": "medium",
+        "3": "low",
+        "4": "backlog"
+      }
+    },
+    "default_type": {
+      "type": "string",
+      "description": "Default issue type for new issues",
+      "default": "task",
+      "enum": ["bug", "feature", "task", "epic", "chore"]
+    },
+    "auto_sync": {
+      "type": "boolean",
+      "description": "Automatically git add + commit after mutations",
+      "default": false
+    },
+    "sync_message_template": {
+      "type": "string",
+      "description": "Commit message template for sync. Variables: {action}, {id}, {title}",
+      "default": "trx: {action} {id}",
+      "examples": [
+        "trx: {action} {id}",
+        "[trx] {action}: {title}",
+        "chore(trx): {action} {id} - {title}"
+      ]
+    },
+    "show_closed": {
+      "type": "boolean",
+      "description": "Show closed issues in list by default",
+      "default": false
+    },
+    "editor": {
+      "type": ["string", "null"],
+      "description": "Editor command for editing descriptions. Uses $EDITOR if not set.",
+      "default": null,
+      "examples": ["vim", "nano", "code --wait", "emacs"]
+    },
+    "git": {
+      "type": "object",
+      "description": "Git-related settings",
+      "properties": {
+        "auto_stage": {
+          "type": "boolean",
+          "description": "Automatically stage .trx/ after changes",
+          "default": false
+        },
+        "sync_branch": {
+          "type": ["string", "null"],
+          "description": "Branch to sync to (if different from current)",
+          "default": null,
+          "examples": ["main", "master", "develop"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "display": {
+      "type": "object",
+      "description": "Display settings",
+      "properties": {
+        "colors": {
+          "type": "boolean",
+          "description": "Use colors in terminal output",
+          "default": true
+        },
+        "date_format": {
+          "type": "string",
+          "description": "Date format for display (strftime format)",
+          "default": "%Y-%m-%d %H:%M",
+          "examples": ["%Y-%m-%d %H:%M", "%d/%m/%Y", "%B %d, %Y"]
+        },
+        "show_count": {
+          "type": "boolean",
+          "description": "Show issue count in list header",
+          "default": true
+        },
+        "max_title_length": {
+          "type": "integer",
+          "description": "Maximum title length before truncation",
+          "default": 80,
+          "minimum": 20,
+          "maximum": 200
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
