@@ -5,10 +5,34 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+/// Storage version for migration support
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum StorageVersion {
+    /// V1: Single issues.jsonl file
+    #[default]
+    V1,
+    /// V2: CRDT files per issue in .trx/crdt/
+    V2,
+}
+
+impl std::fmt::Display for StorageVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StorageVersion::V1 => write!(f, "v1"),
+            StorageVersion::V2 => write!(f, "v2"),
+        }
+    }
+}
+
 /// trx configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
+    /// Storage format version
+    #[serde(default)]
+    pub storage_version: StorageVersion,
+
     /// Issue ID prefix (e.g., "trx", "myproject")
     pub prefix: String,
 
@@ -43,6 +67,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            storage_version: StorageVersion::default(),
             prefix: "trx".to_string(),
             default_priority: 2,
             default_type: "task".to_string(),
@@ -120,6 +145,10 @@ impl Config {
     pub fn default_with_comments() -> String {
         r#"# trx configuration
 # See schema at: https://raw.githubusercontent.com/byteowlz/schemas/main/trx/trx.config.schema.json
+
+# Storage format version (v1 = JSONL, v2 = CRDT)
+# Use 'trx migrate' to upgrade from v1 to v2
+storage_version = "v1"
 
 # Issue ID prefix (e.g., "trx", "myproject")
 prefix = "trx"

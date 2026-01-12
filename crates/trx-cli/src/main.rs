@@ -120,6 +120,21 @@ enum Commands {
         message: Option<String>,
     },
 
+    /// Migrate storage format
+    Migrate {
+        /// Preview migration without making changes
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Rollback from v2 to v1
+        #[arg(long)]
+        rollback: bool,
+
+        /// Skip confirmation prompt
+        #[arg(long, short)]
+        yes: bool,
+    },
+
     /// Import from beads
     Import {
         /// Path to beads issues.jsonl
@@ -258,6 +273,7 @@ fn main() -> Result<()> {
             DepCommands::Tree { id } => commands::dep_tree(&id, cli.json),
         },
         Commands::Sync { message } => commands::sync(message),
+        Commands::Migrate { dry_run, rollback, yes } => commands::migrate(dry_run, rollback, yes),
         Commands::Import { path, prefix } => commands::import(&path, prefix, cli.json),
         Commands::PurgeBeads { force } => commands::purge_beads(force),
         Commands::Schema => commands::schema(),

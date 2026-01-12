@@ -3,7 +3,8 @@
 use anyhow::{Result, bail};
 use colored::Colorize;
 use trx_core::{
-    DependencyType, Issue, IssueGraph, IssueType, Status, Store, generate_id, id::generate_child_id,
+    DependencyType, Issue, IssueGraph, IssueType, Status, StorageVersion, Store,
+    UnifiedStore, generate_id, id::generate_child_id, migrate_v1_to_v2, rollback_v2_to_v1,
 };
 
 pub fn init(prefix: &str) -> Result<()> {
@@ -25,7 +26,7 @@ pub fn create(
     parent: Option<String>,
     json: bool,
 ) -> Result<()> {
-    let mut store = Store::open()?;
+    let mut store = UnifiedStore::open()?;
     let prefix = store.prefix()?;
 
     let id = if let Some(ref parent_id) = parent {
@@ -63,7 +64,7 @@ pub fn list(
     all: bool,
     json: bool,
 ) -> Result<()> {
-    let store = Store::open()?;
+    let store = UnifiedStore::open()?;
     let mut issues: Vec<_> = if all {
         store.list(false)
     } else {
@@ -117,7 +118,7 @@ pub fn list(
 }
 
 pub fn show(id: &str, json: bool) -> Result<()> {
-    let store = Store::open()?;
+    let store = UnifiedStore::open()?;
     let issue = store
         .get(id)
         .ok_or_else(|| anyhow::anyhow!("Issue not found: {}", id))?;
@@ -159,7 +160,7 @@ pub fn update(
     description: Option<String>,
     json: bool,
 ) -> Result<()> {
-    let mut store = Store::open()?;
+    let mut store = UnifiedStore::open()?;
     let issue = store
         .get_mut(id)
         .ok_or_else(|| anyhow::anyhow!("Issue not found: {}", id))?;
@@ -191,7 +192,7 @@ pub fn update(
 }
 
 pub fn close(id: &str, reason: Option<String>, json: bool) -> Result<()> {
-    let mut store = Store::open()?;
+    let mut store = UnifiedStore::open()?;
     let issue = store
         .get_mut(id)
         .ok_or_else(|| anyhow::anyhow!("Issue not found: {}", id))?;
@@ -210,7 +211,7 @@ pub fn close(id: &str, reason: Option<String>, json: bool) -> Result<()> {
 }
 
 pub fn ready(json: bool) -> Result<()> {
-    let store = Store::open()?;
+    let store = UnifiedStore::open()?;
     let open_issues: Vec<_> = store.list_open();
     let graph = IssueGraph::from_issues(&open_issues);
     let mut ready = graph.ready_issues(&open_issues);
@@ -239,7 +240,7 @@ pub fn ready(json: bool) -> Result<()> {
 }
 
 pub fn dep_add(id: &str, blocks: &str, json: bool) -> Result<()> {
-    let mut store = Store::open()?;
+    let mut store = UnifiedStore::open()?;
     let issue = store
         .get_mut(id)
         .ok_or_else(|| anyhow::anyhow!("Issue not found: {}", id))?;
@@ -258,7 +259,7 @@ pub fn dep_add(id: &str, blocks: &str, json: bool) -> Result<()> {
 }
 
 pub fn dep_rm(id: &str, blocks: &str, json: bool) -> Result<()> {
-    let mut store = Store::open()?;
+    let mut store = UnifiedStore::open()?;
     let issue = store
         .get_mut(id)
         .ok_or_else(|| anyhow::anyhow!("Issue not found: {}", id))?;
@@ -277,7 +278,7 @@ pub fn dep_rm(id: &str, blocks: &str, json: bool) -> Result<()> {
 }
 
 pub fn dep_tree(id: &str, _json: bool) -> Result<()> {
-    let store = Store::open()?;
+    let store = UnifiedStore::open()?;
     let _issue = store
         .get(id)
         .ok_or_else(|| anyhow::anyhow!("Issue not found: {}", id))?;
@@ -290,8 +291,21 @@ pub fn dep_tree(id: &str, _json: bool) -> Result<()> {
 }
 
 pub fn sync(message: Option<String>) -> Result<()> {
-    let store = Store::open()?;
+    let mut store = UnifiedStore::open()?;
     let trx_dir = store.trx_dir();
+
+    // Resolve any CRDT conflicts first (v2 only)
+    let resolved = store.resolve_conflicts()?;
+    if !resolved.is_empty() {
+        println!(
+            "{} Resolved {} conflict(s):",
+            "✓".green(),
+            resolved.len()
+        );
+        for file in &resolved {
+            println!("  - {}", file);
+        }
+    }
 
     let msg = message.unwrap_or_else(|| "trx: sync issues".to_string());
 
@@ -325,11 +339,126 @@ pub fn sync(message: Option<String>) -> Result<()> {
     Ok(())
 }
 
+pub fn migrate(dry_run: bool, rollback: bool, yes: bool) -> Result<()> {
+    // Check current version
+    let store = UnifiedStore::open()?;
+    let current_version = store.version();
+    let trx_dir = store.trx_dir();
+    drop(store);
+
+    if rollback {
+        // Rollback v2 -> v1
+        if current_version == StorageVersion::V1 {
+            println!("Already using v1 (JSONL) storage");
+            return Ok(());
+        }
+
+        println!("{}", "Rollback: v2 (CRDT) -> v1 (JSONL)".bold());
+        println!();
+
+        if dry_run {
+            let result = rollback_v2_to_v1(true)?;
+            println!(
+                "Would migrate {} issues back to JSONL format",
+                result.issues_migrated
+            );
+            println!();
+            println!("Run without --dry-run to perform the rollback");
+            return Ok(());
+        }
+
+        if !yes {
+            println!("This will convert CRDT storage back to JSONL format.");
+            println!("The crdt/ directory will be preserved for safety.");
+            println!();
+            print!("Continue? [y/N] ");
+            std::io::Write::flush(&mut std::io::stdout())?;
+
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
+
+            if !input.trim().eq_ignore_ascii_case("y") {
+                println!("Aborted");
+                return Ok(());
+            }
+        }
+
+        let result = rollback_v2_to_v1(false)?;
+        println!(
+            "{} Rolled back {} issues to v1 (JSONL)",
+            "✓".green(),
+            result.issues_migrated
+        );
+        println!();
+        println!("Note: The crdt/ directory was preserved. You can remove it manually:");
+        println!("  rm -rf {}/.trx/crdt", trx_dir.parent().unwrap().display());
+    } else {
+        // Migrate v1 -> v2
+        if current_version == StorageVersion::V2 {
+            println!("Already using v2 (CRDT) storage");
+            return Ok(());
+        }
+
+        println!("{}", "Migration: v1 (JSONL) -> v2 (CRDT)".bold());
+        println!();
+        println!("Benefits of v2:");
+        println!("  - Conflict-free merging across branches/worktrees");
+        println!("  - One file per issue (git handles additions automatically)");
+        println!("  - Human-readable ISSUES.md for browsing without trx");
+        println!();
+
+        if dry_run {
+            let result = migrate_v1_to_v2(true)?;
+            println!(
+                "Would migrate {} issues to CRDT format",
+                result.issues_migrated
+            );
+            println!();
+            println!("Run without --dry-run to perform the migration");
+            return Ok(());
+        }
+
+        if !yes {
+            println!("This will:");
+            println!("  1. Create .trx/crdt/ with one .automerge file per issue");
+            println!("  2. Generate .trx/ISSUES.md for human browsing");
+            println!("  3. Update config.toml to storage_version = \"v2\"");
+            println!("  4. Keep issues.jsonl as backup (can be removed later)");
+            println!();
+            print!("Continue? [y/N] ");
+            std::io::Write::flush(&mut std::io::stdout())?;
+
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
+
+            if !input.trim().eq_ignore_ascii_case("y") {
+                println!("Aborted");
+                return Ok(());
+            }
+        }
+
+        let result = migrate_v1_to_v2(false)?;
+        println!(
+            "{} Migrated {} issues to v2 (CRDT)",
+            "✓".green(),
+            result.issues_migrated
+        );
+        println!();
+        println!("The old issues.jsonl was preserved. You can remove it with:");
+        println!("  rm {}/issues.jsonl", trx_dir.display());
+        println!();
+        println!("Don't forget to commit the changes:");
+        println!("  trx sync -m \"Migrate to CRDT storage\"");
+    }
+
+    Ok(())
+}
+
 pub fn import(path: &str, prefix: Option<String>, json: bool) -> Result<()> {
     use std::fs::File;
     use std::io::{BufRead, BufReader};
 
-    let mut store = Store::open()?;
+    let mut store = UnifiedStore::open()?;
     let new_prefix = prefix.unwrap_or_else(|| store.prefix().unwrap_or_else(|_| "trx".to_string()));
 
     let file = File::open(path)?;
@@ -576,7 +705,7 @@ pub fn schema() -> Result<()> {
 
 /// Show current configuration
 pub fn config_show(json: bool) -> Result<()> {
-    let store = Store::open()?;
+    let store = UnifiedStore::open()?;
     let config_path = store.trx_dir().join("config.toml");
     let config = trx_core::Config::load(&config_path)?;
 
@@ -616,7 +745,7 @@ pub fn config_show(json: bool) -> Result<()> {
 
 /// Edit configuration file
 pub fn config_edit() -> Result<()> {
-    let store = Store::open()?;
+    let store = UnifiedStore::open()?;
     let config_path = store.trx_dir().join("config.toml");
 
     // Get editor from environment
@@ -649,7 +778,7 @@ pub fn config_edit() -> Result<()> {
 
 /// Reset configuration to defaults
 pub fn config_reset() -> Result<()> {
-    let store = Store::open()?;
+    let store = UnifiedStore::open()?;
     let config_path = store.trx_dir().join("config.toml");
 
     let default_config = trx_core::Config::default_with_comments();
@@ -661,7 +790,7 @@ pub fn config_reset() -> Result<()> {
 
 /// Get a specific config value
 pub fn config_get(key: &str, json: bool) -> Result<()> {
-    let store = Store::open()?;
+    let store = UnifiedStore::open()?;
     let config_path = store.trx_dir().join("config.toml");
     let config = trx_core::Config::load(&config_path)?;
 
@@ -695,7 +824,7 @@ pub fn config_get(key: &str, json: bool) -> Result<()> {
 
 /// Set a config value
 pub fn config_set(key: &str, value: &str) -> Result<()> {
-    let store = Store::open()?;
+    let store = UnifiedStore::open()?;
     let config_path = store.trx_dir().join("config.toml");
     let mut config = trx_core::Config::load(&config_path)?;
 
