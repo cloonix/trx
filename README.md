@@ -9,8 +9,8 @@ trx is a minimal, git-native issue tracker focused on simplicity and low overhea
 ## Design Goals
 
 - Minimal footprint with ~20 fields per issue
-- Git-native: all data stored as JSONL, tracked in version control
-- Simple merge semantics
+- Git-native: all data tracked in version control
+- Conflict-free merging with CRDT support (automerge)
 - Easy to understand and extend
 
 ## Architecture
@@ -22,8 +22,40 @@ trx/
 │   ├── trx-cli/      # CLI binary: trx command
 │   └── trx-tui/      # TUI binary: trx-tui viewer
 └── .trx/             # Per-repo issue storage
-    ├── issues.jsonl  # All issues, one per line (git-tracked)
-    └── config.toml   # Repo configuration
+    ├── config.toml   # Repo configuration
+    ├── ISSUES.md     # Human-readable issue summary (auto-generated)
+    ├── issues.jsonl  # V1: All issues, one per line
+    └── crdt/         # V2: One .automerge file per issue
+```
+
+## Storage Versions
+
+trx supports two storage backends:
+
+**V1 (JSONL)**: Simple, human-readable format. All issues stored in a single `issues.jsonl` file. Good for small projects or when human readability is prioritized.
+
+**V2 (CRDT)**: Each issue stored as a separate `.automerge` file. Enables conflict-free merging when multiple users edit issues concurrently. Recommended for teams.
+
+### Why CRDT?
+
+With JSONL, concurrent edits to different issues can still cause merge conflicts because they modify the same file. CRDT storage solves this:
+
+- Each issue is an independent automerge document
+- Concurrent edits to the same issue merge automatically
+- No manual conflict resolution needed
+- Git treats `.automerge` files as binary, automerge handles the merge semantics
+
+### Migration
+
+```bash
+# Check current storage version
+trx migrate --status
+
+# Upgrade v1 -> v2 (CRDT)
+trx migrate
+
+# Rollback v2 -> v1 (preserves crdt/ directory for safety)
+trx migrate --rollback
 ```
 
 ## Data Model
@@ -82,6 +114,17 @@ trx supports importing from beads and uses a compatible JSONL format:
 - Compatible field names: `id`, `title`, `status`, `priority`, `issue_type`
 - Compatible dependency format: `[{issue_id, depends_on_id, type}]`
 - Compatible workspace.yaml format for multi-repo
+
+## Conflict Resolution
+
+With V2 (CRDT) storage, conflicts are resolved automatically during `trx sync`:
+
+```bash
+# After a git pull with conflicts
+trx sync  # Automatically merges any conflicting .automerge files
+```
+
+If git creates conflict marker files (`.BASE`, `.LOCAL`, `.REMOTE`), trx detects and merges them using automerge's built-in conflict resolution.
 
 ## Development
 
