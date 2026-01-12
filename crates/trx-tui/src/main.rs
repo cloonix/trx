@@ -17,7 +17,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
 use std::collections::HashSet;
 use std::io;
@@ -163,6 +163,7 @@ enum AppMode {
     Search,
     Help,
     Sort,
+    Filter,
     WhichKey(WhichKeyContext),
     AddIssue,
     EditIssue,
@@ -497,6 +498,7 @@ impl App {
             AppMode::Search => self.handle_search_mode(action),
             AppMode::Help => self.handle_help_mode(action),
             AppMode::Sort => self.handle_sort_mode(action),
+            AppMode::Filter => self.handle_filter_mode(action),
             AppMode::WhichKey(ctx) => self.handle_which_key_mode(ctx, action),
             AppMode::AddIssue => self.handle_add_issue_mode(action),
             AppMode::EditIssue => self.handle_edit_issue_mode(action),
@@ -594,7 +596,7 @@ impl App {
                 self.mode = AppMode::WhichKey(WhichKeyContext::Labels);
             }
             KeyAction::Char('f') => {
-                self.mode = AppMode::WhichKey(WhichKeyContext::Status);
+                self.mode = AppMode::Filter;
             }
             _ => {
                 self.g_prefix = false;
@@ -662,6 +664,81 @@ impl App {
             _ => {}
         }
         Ok(false)
+    }
+
+    fn handle_filter_mode(&mut self, action: KeyAction) -> Result<bool> {
+        match action {
+            KeyAction::Escape => {
+                self.mode = AppMode::Normal;
+            }
+            // Status filters
+            KeyAction::Char('o') => {
+                self.toggle_status_filter(Status::Open);
+            }
+            KeyAction::Char('i') => {
+                self.toggle_status_filter(Status::InProgress);
+            }
+            KeyAction::Char('b') => {
+                self.toggle_status_filter(Status::Blocked);
+            }
+            KeyAction::Char('c') => {
+                self.filter_state.show_closed = !self.filter_state.show_closed;
+                self.apply_filters()?;
+            }
+            // Type filters
+            KeyAction::Char('B') => {
+                self.toggle_type_filter(trx_core::IssueType::Bug);
+            }
+            KeyAction::Char('F') => {
+                self.toggle_type_filter(trx_core::IssueType::Feature);
+            }
+            KeyAction::Char('T') => {
+                self.toggle_type_filter(trx_core::IssueType::Task);
+            }
+            KeyAction::Char('E') => {
+                self.toggle_type_filter(trx_core::IssueType::Epic);
+            }
+            KeyAction::Char('C') => {
+                self.toggle_type_filter(trx_core::IssueType::Chore);
+            }
+            // Priority filters (show only that priority)
+            KeyAction::Char('0') => {
+                self.filter_by_priority(Some(0));
+            }
+            KeyAction::Char('1') => {
+                self.filter_by_priority(Some(1));
+            }
+            KeyAction::Char('2') => {
+                self.filter_by_priority(Some(2));
+            }
+            KeyAction::Char('3') => {
+                self.filter_by_priority(Some(3));
+            }
+            KeyAction::Char('4') => {
+                self.filter_by_priority(Some(4));
+            }
+            // Reset all filters
+            KeyAction::Char('r') => {
+                self.reset_filters();
+            }
+            _ => {}
+        }
+        Ok(false)
+    }
+
+    fn filter_by_priority(&mut self, priority: Option<u8>) {
+        if let Some(p) = priority {
+            self.filtered_issues.retain(|i| i.priority == p);
+            self.show_status(format!("Filtered to P{}", p));
+        }
+        self.mode = AppMode::Normal;
+    }
+
+    fn reset_filters(&mut self) {
+        self.filter_state = FilterState::new();
+        self.apply_filters().ok();
+        self.show_status("Filters reset".to_string());
+        self.mode = AppMode::Normal;
     }
 
     fn handle_which_key_mode(&mut self, ctx: WhichKeyContext, action: KeyAction) -> Result<bool> {
@@ -747,7 +824,6 @@ impl App {
             self.filter_state.enabled_statuses.insert(status);
         }
         self.apply_filters().ok();
-        self.mode = AppMode::Normal;
     }
 
     fn toggle_type_filter(&mut self, itype: trx_core::IssueType) {
@@ -757,7 +833,6 @@ impl App {
             self.filter_state.enabled_types.insert(itype);
         }
         self.apply_filters().ok();
-        self.mode = AppMode::Normal;
     }
 
     fn set_priority_filter(&mut self, priority: u8) {
@@ -1096,9 +1171,10 @@ fn ui(f: &mut Frame, app: &mut App) {
     render_status_bar(f, app, main_chunks[1]);
 
     match &app.mode {
-        AppMode::Help => render_help_overlay(f, app),
-        AppMode::Sort => render_sort_overlay(f, app),
-        AppMode::WhichKey(ctx) => render_which_key_overlay(f, app, *ctx),
+        AppMode::Help => render_help_overlay(f),
+        AppMode::Sort => render_sort_overlay(f),
+        AppMode::Filter => render_filter_overlay(f, app),
+        AppMode::WhichKey(ctx) => render_which_key_overlay(f, *ctx),
         AppMode::AddIssue => render_issue_form(f, app, "Add Issue"),
         AppMode::EditIssue => render_issue_form(f, app, "Edit Issue"),
         _ => {}
@@ -1402,6 +1478,7 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
         AppMode::Search => "[SEARCH]",
         AppMode::Help => "[HELP]",
         AppMode::Sort => "[SORT]",
+        AppMode::Filter => "[FILTER]",
         AppMode::WhichKey(_) => "[WHICHKEY]",
         AppMode::AddIssue => "[ADD ISSUE]",
         AppMode::EditIssue => "[EDIT ISSUE]",
@@ -1439,8 +1516,11 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(status_bar, area);
 }
 
-fn render_help_overlay(f: &mut Frame, _app: &App) {
+fn render_help_overlay(f: &mut Frame) {
     let area = centered_rect(70, 80, f.area());
+
+    // Clear the background
+    f.render_widget(Clear, area);
 
     let help_text = vec![
         Line::from(vec![Span::styled(
@@ -1467,17 +1547,11 @@ fn render_help_overlay(f: &mut Frame, _app: &App) {
         Line::from("  a          Add issue"),
         Line::from("  e          Edit issue"),
         Line::from("  c          Close issue"),
-        Line::from("  1          Set Open"),
-        Line::from("  2          Set In Progress"),
-        Line::from("  3          Set Blocked"),
-        Line::from("  4          Set Closed"),
+        Line::from("  1-4        Set status (Open/InProgress/Blocked/Closed)"),
         Line::from("  /          Search"),
-        Line::from("  s          Sort"),
+        Line::from("  s          Sort menu"),
+        Line::from("  f          Filter menu"),
         Line::from("  r          Refresh"),
-        Line::from("  f          Status filter (WhichKey)"),
-        Line::from("  t          Type filter (WhichKey)"),
-        Line::from("  p          Priority filter (WhichKey)"),
-        Line::from("  l          Label filter (WhichKey)"),
         Line::from("  ?          Help"),
         Line::from("  q          Quit"),
         Line::from("  Esc        Return to normal mode"),
@@ -1488,7 +1562,8 @@ fn render_help_overlay(f: &mut Frame, _app: &App) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Yellow))
-                .title("Help"),
+                .style(Style::default().bg(Color::Black))
+                .title("Help (press Esc to close)"),
         )
         .alignment(Alignment::Left)
         .wrap(Wrap { trim: true });
@@ -1496,8 +1571,11 @@ fn render_help_overlay(f: &mut Frame, _app: &App) {
     f.render_widget(paragraph, area);
 }
 
-fn render_sort_overlay(f: &mut Frame, _app: &App) {
-    let area = centered_rect(40, 50, f.area());
+fn render_sort_overlay(f: &mut Frame) {
+    let area = centered_rect(40, 30, f.area());
+
+    // Clear the background
+    f.render_widget(Clear, area);
 
     let sort_text = vec![
         Line::from(vec![Span::styled(
@@ -1519,6 +1597,7 @@ fn render_sort_overlay(f: &mut Frame, _app: &App) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Yellow))
+                .style(Style::default().bg(Color::Black))
                 .title("Sort"),
         )
         .alignment(Alignment::Left);
@@ -1526,13 +1605,16 @@ fn render_sort_overlay(f: &mut Frame, _app: &App) {
     f.render_widget(paragraph, area);
 }
 
-fn render_which_key_overlay(f: &mut Frame, _app: &App, ctx: WhichKeyContext) {
+fn render_which_key_overlay(f: &mut Frame, ctx: WhichKeyContext) {
     let area = Rect {
         x: 0,
-        y: f.area().height.saturating_sub(3),
+        y: f.area().height.saturating_sub(4),
         width: f.area().width,
-        height: 3,
+        height: 4,
     };
+
+    // Clear the background
+    f.render_widget(Clear, area);
 
     let items = match ctx {
         WhichKeyContext::Status => vec![
@@ -1586,7 +1668,98 @@ fn render_which_key_overlay(f: &mut Frame, _app: &App, ctx: WhichKeyContext) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Yellow)),
+                .border_style(Style::default().fg(Color::Yellow))
+                .style(Style::default().bg(Color::Black)),
+        )
+        .alignment(Alignment::Left);
+
+    f.render_widget(paragraph, area);
+}
+
+fn render_filter_overlay(f: &mut Frame, app: &App) {
+    let area = centered_rect(60, 70, f.area());
+
+    // Clear the background
+    f.render_widget(Clear, area);
+
+    let check = |enabled: bool| if enabled { "[x]" } else { "[ ]" };
+
+    let filter_text = vec![
+        Line::from(vec![Span::styled(
+            "Filter Options",
+            Style::default()
+                .add_modifier(Modifier::BOLD)
+                .fg(Color::Cyan),
+        )]),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "Status:",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
+        Line::from(format!(
+            "  [o] {} Open",
+            check(app.filter_state.enabled_statuses.contains(&Status::Open))
+        )),
+        Line::from(format!(
+            "  [i] {} In Progress",
+            check(app.filter_state.enabled_statuses.contains(&Status::InProgress))
+        )),
+        Line::from(format!(
+            "  [b] {} Blocked",
+            check(app.filter_state.enabled_statuses.contains(&Status::Blocked))
+        )),
+        Line::from(format!(
+            "  [c] {} Show Closed",
+            check(app.filter_state.show_closed)
+        )),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "Type:",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
+        Line::from(format!(
+            "  [B] {} Bug",
+            check(app.filter_state.enabled_types.contains(&trx_core::IssueType::Bug))
+        )),
+        Line::from(format!(
+            "  [F] {} Feature",
+            check(app.filter_state.enabled_types.contains(&trx_core::IssueType::Feature))
+        )),
+        Line::from(format!(
+            "  [T] {} Task",
+            check(app.filter_state.enabled_types.contains(&trx_core::IssueType::Task))
+        )),
+        Line::from(format!(
+            "  [E] {} Epic",
+            check(app.filter_state.enabled_types.contains(&trx_core::IssueType::Epic))
+        )),
+        Line::from(format!(
+            "  [C] {} Chore",
+            check(app.filter_state.enabled_types.contains(&trx_core::IssueType::Chore))
+        )),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "Priority (filter to single):",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
+        Line::from("  [0] P0 Critical   [1] P1 High   [2] P2 Medium"),
+        Line::from("  [3] P3 Low        [4] P4 Backlog"),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("[r]", Style::default().fg(Color::Yellow)),
+            Span::raw(" Reset all filters   "),
+            Span::styled("[Esc]", Style::default().fg(Color::Red)),
+            Span::raw(" Close"),
+        ]),
+    ];
+
+    let paragraph = Paragraph::new(filter_text)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Yellow))
+                .style(Style::default().bg(Color::Black))
+                .title("Filter (toggles apply immediately)"),
         )
         .alignment(Alignment::Left);
 
@@ -1595,6 +1768,9 @@ fn render_which_key_overlay(f: &mut Frame, _app: &App, ctx: WhichKeyContext) {
 
 fn render_issue_form(f: &mut Frame, app: &App, title: &str) {
     let area = centered_rect(60, 70, f.area());
+
+    // Clear the background
+    f.render_widget(Clear, area);
 
     let form = &app.issue_form;
 
@@ -1704,6 +1880,7 @@ fn render_issue_form(f: &mut Frame, app: &App, title: &str) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Blue))
+                .style(Style::default().bg(Color::Black))
                 .title(title),
         )
         .alignment(Alignment::Left)
