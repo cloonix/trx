@@ -387,7 +387,7 @@ impl CrdtStore {
         // Closed issues
         if !closed.is_empty() {
             content.push_str("## Closed\n\n");
-            for issue in closed.iter().take(20) {
+            for issue in &closed {
                 let closed_date = issue.closed_at
                     .map(|dt| dt.format("%Y-%m-%d").to_string())
                     .unwrap_or_default();
@@ -395,9 +395,6 @@ impl CrdtStore {
                     "- [{}] {} (closed {})\n",
                     issue.id, issue.title, closed_date
                 ));
-            }
-            if closed.len() > 20 {
-                content.push_str(&format!("\n...and {} more\n", closed.len() - 20));
             }
         }
 
