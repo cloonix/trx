@@ -21,7 +21,7 @@ pub use id::generate_id;
 pub use issue::{Dependency, DependencyType, Issue, IssueType, Status};
 pub use service::{ServiceManager, ServiceStatus};
 pub use store::Store;
-pub use unified_store::{migrate_v1_to_v2, rollback_v2_to_v1, MigrationResult, UnifiedStore};
+pub use unified_store::{MigrationResult, UnifiedStore, migrate_v1_to_v2, rollback_v2_to_v1};
 
 /// Result type for trx operations
 pub type Result<T> = std::result::Result<T, Error>;

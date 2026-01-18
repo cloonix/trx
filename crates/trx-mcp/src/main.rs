@@ -5,18 +5,18 @@
 
 use anyhow::Context;
 use mcp_server::router::RouterService;
+use mcp_spec::ResourceContents;
 use mcp_spec::content::Content;
 use mcp_spec::handler::{PromptError, ResourceError, ToolError};
 use mcp_spec::prompt::Prompt;
 use mcp_spec::protocol::ServerCapabilities;
 use mcp_spec::resource::Resource;
 use mcp_spec::tool::Tool;
-use mcp_spec::ResourceContents;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use trx_core::{generate_id, Issue, IssueType, Status, Store};
+use trx_core::{Issue, IssueType, Status, Store, generate_id};
 
 /// MCP router for trx
 #[derive(Clone)]
@@ -153,7 +153,11 @@ impl TrxMcpRouter {
             .map_err(|e| ToolError::ExecutionError(e.to_string()))?;
 
         let include_tombstones = args.include_tombstones.unwrap_or(false);
-        let mut issues: Vec<_> = store.list(include_tombstones).into_iter().cloned().collect();
+        let mut issues: Vec<_> = store
+            .list(include_tombstones)
+            .into_iter()
+            .cloned()
+            .collect();
 
         // Filter by status
         if let Some(status_str) = &args.status {
@@ -454,7 +458,10 @@ impl TrxMcpRouter {
     }
 
     // Tool: remove dependency
-    fn tool_remove_dependency(&self, args: RemoveDependencyArgs) -> Result<Vec<Content>, ToolError> {
+    fn tool_remove_dependency(
+        &self,
+        args: RemoveDependencyArgs,
+    ) -> Result<Vec<Content>, ToolError> {
         let mut store = self
             .inner
             .store
@@ -734,7 +741,9 @@ fn parse_workdir() -> anyhow::Result<Option<PathBuf>> {
                 return Ok(Some(PathBuf::from(path)));
             }
             "-h" | "--help" => {
-                println!("trx-mcp\n\nUsage:\n  trx-mcp [--workdir PATH]\n\nRuns an MCP (Model Context Protocol) server over stdio for trx issue tracking.");
+                println!(
+                    "trx-mcp\n\nUsage:\n  trx-mcp [--workdir PATH]\n\nRuns an MCP (Model Context Protocol) server over stdio for trx issue tracking."
+                );
                 std::process::exit(0);
             }
             _ => continue,

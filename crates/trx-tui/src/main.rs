@@ -1702,7 +1702,11 @@ fn render_filter_overlay(f: &mut Frame, app: &App) {
         )),
         Line::from(format!(
             "  [i] {} In Progress",
-            check(app.filter_state.enabled_statuses.contains(&Status::InProgress))
+            check(
+                app.filter_state
+                    .enabled_statuses
+                    .contains(&Status::InProgress)
+            )
         )),
         Line::from(format!(
             "  [b] {} Blocked",
@@ -1719,23 +1723,43 @@ fn render_filter_overlay(f: &mut Frame, app: &App) {
         )]),
         Line::from(format!(
             "  [B] {} Bug",
-            check(app.filter_state.enabled_types.contains(&trx_core::IssueType::Bug))
+            check(
+                app.filter_state
+                    .enabled_types
+                    .contains(&trx_core::IssueType::Bug)
+            )
         )),
         Line::from(format!(
             "  [F] {} Feature",
-            check(app.filter_state.enabled_types.contains(&trx_core::IssueType::Feature))
+            check(
+                app.filter_state
+                    .enabled_types
+                    .contains(&trx_core::IssueType::Feature)
+            )
         )),
         Line::from(format!(
             "  [T] {} Task",
-            check(app.filter_state.enabled_types.contains(&trx_core::IssueType::Task))
+            check(
+                app.filter_state
+                    .enabled_types
+                    .contains(&trx_core::IssueType::Task)
+            )
         )),
         Line::from(format!(
             "  [E] {} Epic",
-            check(app.filter_state.enabled_types.contains(&trx_core::IssueType::Epic))
+            check(
+                app.filter_state
+                    .enabled_types
+                    .contains(&trx_core::IssueType::Epic)
+            )
         )),
         Line::from(format!(
             "  [C] {} Chore",
-            check(app.filter_state.enabled_types.contains(&trx_core::IssueType::Chore))
+            check(
+                app.filter_state
+                    .enabled_types
+                    .contains(&trx_core::IssueType::Chore)
+            )
         )),
         Line::from(""),
         Line::from(vec![Span::styled(

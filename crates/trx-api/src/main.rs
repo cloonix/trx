@@ -3,17 +3,17 @@
 //! Provides HTTP endpoints for CRUD operations on issues.
 
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, post},
-    Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
-use trx_core::{generate_id, Issue, IssueType, Status, Store};
+use trx_core::{Issue, IssueType, Status, Store, generate_id};
 
 /// Shared application state
 struct AppState {
@@ -128,7 +128,11 @@ async fn list_issues(
 ) -> impl IntoResponse {
     let store = state.store.read().unwrap();
     let include_tombstones = query.include_tombstones.unwrap_or(false);
-    let mut issues: Vec<_> = store.list(include_tombstones).into_iter().cloned().collect();
+    let mut issues: Vec<_> = store
+        .list(include_tombstones)
+        .into_iter()
+        .cloned()
+        .collect();
 
     // Filter by status
     if let Some(status_str) = &query.status {
@@ -481,13 +485,14 @@ async fn main() -> anyhow::Result<()> {
         .route("/issues/ready", get(list_ready))
         .route(
             "/issues/{id}",
-            get(get_issue)
-                .patch(update_issue)
-                .delete(delete_issue),
+            get(get_issue).patch(update_issue).delete(delete_issue),
         )
         .route("/issues/{id}/close", post(close_issue))
         .route("/issues/{id}/dependencies", post(add_dependency))
-        .route("/issues/{id}/dependencies/{dep_id}", delete(remove_dependency))
+        .route(
+            "/issues/{id}/dependencies/{dep_id}",
+            delete(remove_dependency),
+        )
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any))
         .layer(TraceLayer::new_for_http())
         .with_state(state);

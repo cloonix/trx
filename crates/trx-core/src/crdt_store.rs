@@ -102,7 +102,7 @@ impl CrdtStore {
         for entry in fs::read_dir(&crdt_dir)? {
             let entry = entry?;
             let path = entry.path();
-            
+
             if path.extension().is_some_and(|ext| ext == "automerge") {
                 match self.load_issue_from_file(&path) {
                     Ok(issue) => {
@@ -132,16 +132,18 @@ impl CrdtStore {
 
     /// Helper to get a string from an automerge doc at root
     fn get_str(doc: &AutoCommit, key: &str) -> Option<String> {
-        doc.get(automerge::ROOT, key).ok().flatten().and_then(|(v, _)| {
-            v.to_str().map(|s| s.to_string())
-        })
+        doc.get(automerge::ROOT, key)
+            .ok()
+            .flatten()
+            .and_then(|(v, _)| v.to_str().map(|s| s.to_string()))
     }
 
     /// Helper to get a u8 from an automerge doc at root
     fn get_u8(doc: &AutoCommit, key: &str) -> Option<u8> {
-        doc.get(automerge::ROOT, key).ok().flatten().and_then(|(v, _)| {
-            v.to_i64().map(|n| n as u8)
-        })
+        doc.get(automerge::ROOT, key)
+            .ok()
+            .flatten()
+            .and_then(|(v, _)| v.to_i64().map(|n| n as u8))
     }
 
     /// Helper to get a datetime from an automerge doc at root
@@ -155,13 +157,13 @@ impl CrdtStore {
 
     /// Convert an automerge document to an Issue
     fn doc_to_issue(&self, doc: &AutoCommit) -> Result<Issue> {
-        let id = Self::get_str(doc, "id")
-            .ok_or_else(|| Error::Other("Missing id field".to_string()))?;
+        let id =
+            Self::get_str(doc, "id").ok_or_else(|| Error::Other("Missing id field".to_string()))?;
         let title = Self::get_str(doc, "title")
             .ok_or_else(|| Error::Other("Missing title field".to_string()))?;
-        
+
         let mut issue = Issue::new(id, title);
-        
+
         if let Some(desc) = Self::get_str(doc, "description") {
             issue.description = Some(desc);
         }
@@ -212,9 +214,10 @@ impl CrdtStore {
                 if let Ok(Some((_, dep_obj))) = doc.get(&deps_id, i) {
                     // Get dependency fields
                     let get_dep_field = |key: &str| -> Option<String> {
-                        doc.get(&dep_obj, key).ok().flatten().and_then(|(v, _)| {
-                            v.to_str().map(|s| s.to_string())
-                        })
+                        doc.get(&dep_obj, key)
+                            .ok()
+                            .flatten()
+                            .and_then(|(v, _)| v.to_str().map(|s| s.to_string()))
                     };
 
                     let issue_id = get_dep_field("issue_id");
@@ -261,26 +264,42 @@ impl CrdtStore {
             .map_err(|e| Error::Other(format!("Failed to set id: {}", e)))?;
         doc.put(automerge::ROOT, "title", issue.title.as_str())
             .map_err(|e| Error::Other(format!("Failed to set title: {}", e)))?;
-        
+
         if let Some(ref desc) = issue.description {
             doc.put(automerge::ROOT, "description", desc.as_str())
                 .map_err(|e| Error::Other(format!("Failed to set description: {}", e)))?;
         }
-        
+
         doc.put(automerge::ROOT, "status", issue.status.to_string().as_str())
             .map_err(|e| Error::Other(format!("Failed to set status: {}", e)))?;
         doc.put(automerge::ROOT, "priority", issue.priority as i64)
             .map_err(|e| Error::Other(format!("Failed to set priority: {}", e)))?;
-        doc.put(automerge::ROOT, "issue_type", issue.issue_type.to_string().as_str())
-            .map_err(|e| Error::Other(format!("Failed to set issue_type: {}", e)))?;
-        doc.put(automerge::ROOT, "created_at", issue.created_at.to_rfc3339().as_str())
-            .map_err(|e| Error::Other(format!("Failed to set created_at: {}", e)))?;
-        doc.put(automerge::ROOT, "updated_at", issue.updated_at.to_rfc3339().as_str())
-            .map_err(|e| Error::Other(format!("Failed to set updated_at: {}", e)))?;
+        doc.put(
+            automerge::ROOT,
+            "issue_type",
+            issue.issue_type.to_string().as_str(),
+        )
+        .map_err(|e| Error::Other(format!("Failed to set issue_type: {}", e)))?;
+        doc.put(
+            automerge::ROOT,
+            "created_at",
+            issue.created_at.to_rfc3339().as_str(),
+        )
+        .map_err(|e| Error::Other(format!("Failed to set created_at: {}", e)))?;
+        doc.put(
+            automerge::ROOT,
+            "updated_at",
+            issue.updated_at.to_rfc3339().as_str(),
+        )
+        .map_err(|e| Error::Other(format!("Failed to set updated_at: {}", e)))?;
 
         if let Some(ref closed_at) = issue.closed_at {
-            doc.put(automerge::ROOT, "closed_at", closed_at.to_rfc3339().as_str())
-                .map_err(|e| Error::Other(format!("Failed to set closed_at: {}", e)))?;
+            doc.put(
+                automerge::ROOT,
+                "closed_at",
+                closed_at.to_rfc3339().as_str(),
+            )
+            .map_err(|e| Error::Other(format!("Failed to set closed_at: {}", e)))?;
         }
         if let Some(ref assignee) = issue.assignee {
             doc.put(automerge::ROOT, "assignee", assignee.as_str())
@@ -297,7 +316,8 @@ impl CrdtStore {
 
         // Labels
         if !issue.labels.is_empty() {
-            let labels_id = doc.put_object(automerge::ROOT, "labels", ObjType::List)
+            let labels_id = doc
+                .put_object(automerge::ROOT, "labels", ObjType::List)
                 .map_err(|e| Error::Other(format!("Failed to create labels: {}", e)))?;
             for (i, label) in issue.labels.iter().enumerate() {
                 doc.insert(&labels_id, i, label.as_str())
@@ -307,13 +327,15 @@ impl CrdtStore {
 
         // Dependencies
         if !issue.dependencies.is_empty() {
-            let deps_id = doc.put_object(automerge::ROOT, "dependencies", ObjType::List)
+            let deps_id = doc
+                .put_object(automerge::ROOT, "dependencies", ObjType::List)
                 .map_err(|e| Error::Other(format!("Failed to create dependencies: {}", e)))?;
-            
+
             for (i, dep) in issue.dependencies.iter().enumerate() {
-                let dep_obj = doc.insert_object(&deps_id, i, ObjType::Map)
+                let dep_obj = doc
+                    .insert_object(&deps_id, i, ObjType::Map)
                     .map_err(|e| Error::Other(format!("Failed to create dep object: {}", e)))?;
-                
+
                 doc.put(&dep_obj, "issue_id", dep.issue_id.as_str())
                     .map_err(|e| Error::Other(format!("Failed to set dep issue_id: {}", e)))?;
                 doc.put(&dep_obj, "depends_on_id", dep.depends_on_id.as_str())
@@ -323,8 +345,9 @@ impl CrdtStore {
                 doc.put(&dep_obj, "created_at", dep.created_at.to_rfc3339().as_str())
                     .map_err(|e| Error::Other(format!("Failed to set dep created_at: {}", e)))?;
                 if let Some(ref by) = dep.created_by {
-                    doc.put(&dep_obj, "created_by", by.as_str())
-                        .map_err(|e| Error::Other(format!("Failed to set dep created_by: {}", e)))?;
+                    doc.put(&dep_obj, "created_by", by.as_str()).map_err(|e| {
+                        Error::Other(format!("Failed to set dep created_by: {}", e))
+                    })?;
                 }
             }
         }
@@ -336,11 +359,11 @@ impl CrdtStore {
     fn save_issue(&self, issue: &Issue) -> Result<()> {
         let mut doc = self.issue_to_doc(issue)?;
         let bytes = doc.save();
-        
+
         let path = self.issue_path(&issue.id);
         let mut file = File::create(&path)?;
         file.write_all(&bytes)?;
-        
+
         Ok(())
     }
 
@@ -349,16 +372,21 @@ impl CrdtStore {
         let mut content = String::from("# Issues\n\n");
 
         // Collect and sort issues
-        let mut open: Vec<_> = self.issues.values()
+        let mut open: Vec<_> = self
+            .issues
+            .values()
             .filter(|i| i.status.is_open())
             .collect();
-        let mut closed: Vec<_> = self.issues.values()
+        let mut closed: Vec<_> = self
+            .issues
+            .values()
             .filter(|i| i.status.is_closed() && i.status != crate::Status::Tombstone)
             .collect();
 
         // Sort by priority, then by created_at
         open.sort_by(|a, b| {
-            a.priority.cmp(&b.priority)
+            a.priority
+                .cmp(&b.priority)
                 .then_with(|| b.created_at.cmp(&a.created_at))
         });
         closed.sort_by(|a, b| b.closed_at.cmp(&a.closed_at));
@@ -388,7 +416,8 @@ impl CrdtStore {
         if !closed.is_empty() {
             content.push_str("## Closed\n\n");
             for issue in &closed {
-                let closed_date = issue.closed_at
+                let closed_date = issue
+                    .closed_at
                     .map(|dt| dt.format("%Y-%m-%d").to_string())
                     .unwrap_or_default();
                 content.push_str(&format!(
@@ -421,10 +450,10 @@ impl CrdtStore {
         if self.issues.contains_key(&issue.id) {
             return Err(Error::AlreadyExists(issue.id));
         }
-        
+
         // Ensure crdt directory exists
         fs::create_dir_all(self.crdt_dir())?;
-        
+
         self.save_issue(&issue)?;
         self.issues.insert(issue.id.clone(), issue);
         self.regenerate_issues_md()?;
@@ -499,7 +528,7 @@ impl CrdtStore {
     }
 
     /// Merge a conflicting automerge file
-    /// 
+    ///
     /// Called when git detects a binary conflict on a .automerge file.
     /// Takes base, ours, theirs and produces a merged result.
     pub fn merge_conflict(_base: &[u8], ours: &[u8], theirs: &[u8]) -> Result<Vec<u8>> {
@@ -519,7 +548,8 @@ impl CrdtStore {
         };
 
         // Merge theirs into ours - automerge handles this automatically
-        doc_ours.merge(&mut doc_theirs.clone())
+        doc_ours
+            .merge(&mut doc_theirs.clone())
             .map_err(|e| Error::Other(format!("Failed to merge: {}", e)))?;
 
         Ok(doc_ours.save())
@@ -532,18 +562,22 @@ impl CrdtStore {
 
         // Look for git conflict markers (files like *.automerge.BASE, *.automerge.LOCAL, etc.)
         // Git creates these during a merge conflict for binary files
-        
+
         for entry in fs::read_dir(&crdt_dir)? {
             let entry = entry?;
             let path = entry.path();
             let name = path.file_name().unwrap_or_default().to_string_lossy();
-            
+
             // Check if this is a conflict file
-            if name.ends_with(".automerge") && !name.contains(".BASE") && !name.contains(".LOCAL") && !name.contains(".REMOTE") {
+            if name.ends_with(".automerge")
+                && !name.contains(".BASE")
+                && !name.contains(".LOCAL")
+                && !name.contains(".REMOTE")
+            {
                 let base_path = crdt_dir.join(format!("{}.BASE", name));
                 let local_path = crdt_dir.join(format!("{}.LOCAL", name));
                 let remote_path = crdt_dir.join(format!("{}.REMOTE", name));
-                
+
                 if local_path.exists() && remote_path.exists() {
                     // We have a conflict to resolve
                     let base_bytes = if base_path.exists() {
@@ -553,17 +587,17 @@ impl CrdtStore {
                     };
                     let local_bytes = fs::read(&local_path)?;
                     let remote_bytes = fs::read(&remote_path)?;
-                    
+
                     let merged = Self::merge_conflict(&base_bytes, &local_bytes, &remote_bytes)?;
-                    
+
                     // Write merged result
                     fs::write(&path, merged)?;
-                    
+
                     // Clean up conflict files
                     let _ = fs::remove_file(&base_path);
                     let _ = fs::remove_file(&local_path);
                     let _ = fs::remove_file(&remote_path);
-                    
+
                     resolved.push(name.to_string());
                 }
             }

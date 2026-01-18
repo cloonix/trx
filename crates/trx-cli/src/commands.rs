@@ -3,8 +3,8 @@
 use anyhow::{Result, bail};
 use colored::Colorize;
 use trx_core::{
-    DependencyType, Issue, IssueGraph, IssueType, Status, StorageVersion, Store,
-    UnifiedStore, generate_id, id::generate_child_id, migrate_v1_to_v2, rollback_v2_to_v1,
+    DependencyType, Issue, IssueGraph, IssueType, Status, StorageVersion, Store, UnifiedStore,
+    generate_id, id::generate_child_id, migrate_v1_to_v2, rollback_v2_to_v1,
 };
 
 pub fn init(prefix: &str) -> Result<()> {
@@ -297,11 +297,7 @@ pub fn sync(message: Option<String>) -> Result<()> {
     // Resolve any CRDT conflicts first (v2 only)
     let resolved = store.resolve_conflicts()?;
     if !resolved.is_empty() {
-        println!(
-            "{} Resolved {} conflict(s):",
-            "✓".green(),
-            resolved.len()
-        );
+        println!("{} Resolved {} conflict(s):", "✓".green(), resolved.len());
         for file in &resolved {
             println!("  - {}", file);
         }

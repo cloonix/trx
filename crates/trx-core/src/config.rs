@@ -10,9 +10,9 @@ use std::path::Path;
 #[serde(rename_all = "lowercase")]
 pub enum StorageVersion {
     /// V1: Single issues.jsonl file
-    #[default]
     V1,
     /// V2: CRDT files per issue in .trx/crdt/
+    #[default]
     V2,
 }
 
@@ -147,8 +147,8 @@ impl Config {
 # See schema at: https://raw.githubusercontent.com/byteowlz/schemas/main/trx/trx.config.schema.json
 
 # Storage format version (v1 = JSONL, v2 = CRDT)
-# Use 'trx migrate' to upgrade from v1 to v2
-storage_version = "v1"
+# Use 'trx migrate' to switch between versions
+storage_version = "v2"
 
 # Issue ID prefix (e.g., "trx", "myproject")
 prefix = "trx"
